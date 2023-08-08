@@ -8,9 +8,6 @@ import {Network} from "./constructs/network";
 import {ServerlessDatabase} from "./constructs/serverless-database";
 import {DatagenPlayers} from "./constructs/datagen/datagen-players";
 import {Port} from "aws-cdk-lib/aws-ec2";
-import {MemorydbSync} from "./constructs/memorydb-sync";
-import {GrafanaDashboard} from "./constructs/grafana-dashboard";
-import {DatagenPublish} from "./constructs/datagen/datagen-publish";
 
 export class GamingLeaderboardStack extends Stack {
     constructor(scope: Construct, id: string, props?: StackProps) {
@@ -66,40 +63,6 @@ export class GamingLeaderboardStack extends Stack {
             serverlessDatabase.securityGroup.addIngressRule(managedFlinkNotebook.applicationSecurityGroup, Port.tcp(3306))
         }
 
-        // ------------------- Part 3: Gaming leaderboard processing, storage and visual dashboard -------------------
-        // Kinesis Data Stream results
-        const resultsStream = new Stream(this, 'results', {
-            streamName: Aws.STACK_NAME + "-results",
-            streamMode: StreamMode.ON_DEMAND,
-            encryption: StreamEncryption.MANAGED
-        });
 
-        // Sync redis commands from results stream tp MemoryDB for Redis
-        const memorydbSync = new MemorydbSync(this, "MemorydbSync", {vpc: network.vpc, stream: resultsStream});
-        // Connect grafana to MemoryDB for Redis for the dashboard
-        new GrafanaDashboard(this, "GrafanaDashboard", {
-            vpc: network.vpc,
-            securityGroup: memorydbSync.redisSecurityGroup
-        });
-
-        // ------------------- Part 4: Dynamic config -------------------
-        // Kinesis Data Stream dynamic config
-        new Stream(this, 'config', {
-            streamName: Aws.STACK_NAME + "-config",
-            streamMode: StreamMode.PROVISIONED,
-            shardCount: 1,
-            encryption: StreamEncryption.MANAGED
-        });
-
-        // Publish function for pushing new event to control channel
-        new DatagenPublish(this, "DatagenPublish");
-
-        // ------------------- Part 5: Archival and Replay -------------------
-        // Create new stream from the console or run below code to auto complete setup
-        new Stream(this, 'replay', {
-            streamName: Aws.STACK_NAME + "-replay",
-            streamMode: StreamMode.ON_DEMAND,
-            encryption: StreamEncryption.MANAGED
-        });
     }
 }
